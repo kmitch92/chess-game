@@ -1,13 +1,31 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Chess, Square, PieceSymbol } from 'chess.js';
+import { Chess, Square } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import Engine from './engine';
 import './App.css';
+import {
+  findBestMove,
+  makeRandomMove,
+  getMoveOptions,
+  onDrop,
+  onPromotionPieceSelect,
+  onSquareClick,
+  onSquareRightClick,
+} from './chessboardUtils';
 
-// let compiledStockfish: any;
-// WebAssembly.instantiateStreaming(fetch('stockfish.wasm.js')).then((results) => {
-//   compiledStockfish = results.instance.exports;
-// });
+/*
+TO-DO:
+- support playing as black
+- fix click on piece to show options - works sporadically
+- fix promotion - works sporadically
+- add analysis board
+- add move history
+- show won pieces for each side
+- add win dialog
+- fix game over alerts so that they show after the move
+- fix game over alerts so that they are in the style of promotion dialog
+ - separate functions into utils files
+*/
 
 const buttonStyle = {
   cursor: 'pointer',
@@ -19,98 +37,88 @@ const buttonStyle = {
   boxShadow: '0 2px 5px rgba(0, 0, 0, 0.5)',
 };
 
-// const inputStyle = {
-//   padding: "10px 20px",
-//   margin: "10px 0 10px 0",
-//   borderRadius: "6px",
-//   border: "none",
-//   boxShadow: "0 2px 5px rgba(0, 0, 0, 0.5)",
-//   width: "100%",
-// };
-
 const boardWrapper = {
   width: `70vw`,
   maxWidth: '70vh',
   margin: '3rem auto',
 };
 
+export interface ISquaresOptions {
+  [key: string]:
+    | {
+        background?: string;
+        borderRadius?: string;
+      }
+    | undefined;
+}
+
+export interface ISquaresRightClicked {
+  [key: string]:
+    | {
+        backgroundColor?: string;
+      }
+    | undefined;
+}
+
 function App() {
+  const [stockfishLevel, setStockfishLevel] = useState(2);
   const levels = {
+    'Random 🎲': 0,
     'Easy 🤓': 2,
     'Medium 🧐': 8,
     'Hard 😵': 18,
   };
 
   const engine = useMemo(() => new Engine(), []);
-  const game = useMemo(() => new Chess(), []);
-  const [gamePosition, setGamePosition] = useState(game.fen());
-  const [stockfishLevel, setStockfishLevel] = useState(2);
-  const [playerTurn, setPlayerTurn] = useState('w');
+  const [game, setGame] = useState(new Chess());
+  const [gamePosition, setGamePosition] = useState<string>(game.fen());
 
-  function findBestMove() {
-    engine.evaluatePosition(game.fen(), stockfishLevel);
-    engine.onMessage((message) => {
-      console.log('in findBestMove', message);
-      if (message.bestMove) {
-        // In latest chess.js versions you can just write ```game.move(message.bestMove)```
-        game.move({
-          from: message.bestMove.substring(0, 2),
-          to: message.bestMove.substring(2, 4),
-          promotion: message.bestMove.substring(4, 5),
-        });
-        setGamePosition(game.fen());
-        setPlayerTurn('w');
-      }
-    });
-  }
+  const [playerTurn, setPlayerTurn] = useState<'w' | 'b'>('w');
+  const [moveFrom, setMoveFrom] = useState<Square | null>(null);
+  const [moveTo, setMoveTo] = useState<Square | null>(null);
+  const [showPromotionDialog, setShowPromotionDialog] =
+    useState<boolean>(false);
+  const [rightClickedSquares, setRightClickedSquares] =
+    useState<ISquaresRightClicked>({});
+  const [moveSquares, setMoveSquares] = useState({});
+  const [optionSquares, setOptionSquares] = useState<ISquaresOptions>({});
 
   useEffect(() => {
-    const stockfish = new Worker('stockfish.js');
-    const DEPTH = 8; // number of halfmoves the engine looks ahead
-    const FEN_POSITION =
-      'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-
-    stockfish.postMessage('uci');
-    stockfish.postMessage(`position fen ${FEN_POSITION}`);
-    stockfish.postMessage(`go depth ${DEPTH}`);
-
-    stockfish.onmessage = (e) => {
-      // console.log(e.data); // in the console output you will see `bestmove e2e4` message
-    };
-  }, []);
-
-  useEffect(() => {
-    console.log(gamePosition);
+    if (game.isCheckmate()) {
+      alert('Checkmate!');
+    } else if (game.isDraw()) {
+      alert('Draw!');
+    } else if (game.isStalemate()) {
+      alert('Stalemate!');
+    } else if (game.isThreefoldRepetition()) {
+      alert('Threefold Repetition!');
+    } else if (game.isInsufficientMaterial()) {
+      alert('Insufficient Material!');
+    }
     if ((!game.isGameOver() || game.isDraw()) && playerTurn === 'b') {
-      setTimeout(findBestMove, 1000);
-      // findBestMove();
+      setTimeout(
+        stockfishLevel === 0
+          ? () => makeRandomMove(game, setGamePosition, setPlayerTurn)
+          : () =>
+              findBestMove(
+                engine,
+                stockfishLevel,
+                game,
+                setGamePosition,
+                setPlayerTurn
+              ),
+        500
+      );
     }
   }, [gamePosition, playerTurn]);
 
-  function onDrop(
-    sourceSquare: Square,
-    targetSquare: Square,
-    piece: PieceSymbol
-  ): boolean {
-    const move = game.move({
-      from: sourceSquare,
-      to: targetSquare,
-      promotion: piece[1].toLowerCase() ?? 'q',
-    });
-    setGamePosition(game.fen());
-
-    // illegal move
-    if (move === null) return false;
-    setPlayerTurn('b');
-    return true;
-    // // exit if the game is over
-    // if (game.isGameOver() || game.isDraw()) return false;
-    // findBestMove();
-    // return true;
-  }
+  useEffect(() => {
+    console.log('LOGGER', { moveFrom, moveTo, moveSquares, optionSquares });
+  }, [moveFrom, moveTo, moveSquares, optionSquares]);
 
   return (
     <div style={boardWrapper}>
+      <h3>Stockfish Level: {stockfishLevel}</h3>
       <div
         style={{
           display: 'flex',
@@ -125,6 +133,7 @@ function App() {
               backgroundColor: depth === stockfishLevel ? '#B58863' : '#f0d9b5',
             }}
             onClick={() => setStockfishLevel(depth)}
+            key={level}
           >
             {level}
           </button>
@@ -133,9 +142,71 @@ function App() {
 
       <Chessboard
         id="PlayVsStockfish"
+        animationDuration={200}
         position={gamePosition}
-        // @ts-ignore
-        onPieceDrop={onDrop}
+        onSquareClick={(square) =>
+          onSquareClick(
+            game,
+            square,
+            moveFrom,
+            moveTo,
+            setMoveFrom,
+            setMoveTo,
+            setOptionSquares,
+            setShowPromotionDialog,
+            setGamePosition,
+            setGame,
+            setPlayerTurn
+          )
+        }
+        onSquareRightClick={(square) =>
+          onSquareRightClick(
+            square,
+            setRightClickedSquares,
+            rightClickedSquares
+          )
+        }
+        onPromotionPieceSelect={(piece) =>
+          onPromotionPieceSelect(
+            piece,
+            game,
+            moveTo,
+            moveFrom,
+            setMoveFrom,
+            setMoveTo,
+            setOptionSquares,
+            setShowPromotionDialog,
+            setGamePosition,
+            setGame,
+            setPlayerTurn
+          )
+        }
+        onPieceDrop={(sourceSquare, targetSquare, piece) =>
+          onDrop(
+            sourceSquare,
+            targetSquare,
+            piece,
+            game,
+            setMoveFrom,
+            setMoveTo,
+            setShowPromotionDialog,
+            setGamePosition,
+            setPlayerTurn,
+            setRightClickedSquares
+          )
+        }
+        promotionToSquare={moveTo}
+        showPromotionDialog={showPromotionDialog}
+        promotionDialogVariant="modal"
+        customBoardStyle={{
+          borderRadius: '4px',
+          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.5)',
+        }}
+        customSquareStyles={{
+          ...moveSquares,
+          ...optionSquares,
+          ...rightClickedSquares,
+        }}
       />
 
       <button
@@ -143,6 +214,9 @@ function App() {
         onClick={() => {
           game.reset();
           setGamePosition(game.fen());
+          setRightClickedSquares({});
+          setMoveSquares({});
+          setOptionSquares({});
         }}
       >
         New game
@@ -153,6 +227,9 @@ function App() {
           game.undo();
           game.undo();
           setGamePosition(game.fen());
+          setMoveSquares({});
+          setOptionSquares({});
+          setRightClickedSquares({});
         }}
       >
         Undo
