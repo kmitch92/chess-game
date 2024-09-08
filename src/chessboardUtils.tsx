@@ -216,7 +216,8 @@ export const onDrop = (
   setPlayerTurn: (value: React.SetStateAction<'w' | 'b'>) => void,
   setRightClickedSquares: (
     value: React.SetStateAction<ISquaresRightClicked>
-  ) => void
+  ) => void,
+  setOptionSquares: (value: React.SetStateAction<ISquaresOptions>) => void
 ) => {
   setMoveFrom(sourceSquare);
   setMoveTo(targetSquare);
@@ -244,5 +245,8 @@ export const onDrop = (
   if (move === null) return false;
   setRightClickedSquares({});
   setPlayerTurn('b');
+  setMoveFrom(null);
+  setMoveTo(null);
+  setOptionSquares({});
   return true;
 };

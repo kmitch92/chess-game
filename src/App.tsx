@@ -16,7 +16,7 @@ import {
 /*
 TO-DO:
 - support playing as black
-- fix click on piece to show options - works sporadically
+- fix click on piece to show options - works until drag and drop is used
 - fix promotion - works sporadically
 - add analysis board
 - add move history
@@ -192,7 +192,8 @@ function App() {
             setShowPromotionDialog,
             setGamePosition,
             setPlayerTurn,
-            setRightClickedSquares
+            setRightClickedSquares,
+            setOptionSquares
           )
         }
         promotionToSquare={moveTo}
