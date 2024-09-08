@@ -6,7 +6,6 @@ import './App.css';
 import {
   findBestMove,
   makeRandomMove,
-  getMoveOptions,
   onDrop,
   onPromotionPieceSelect,
   onSquareClick,
@@ -16,15 +15,14 @@ import {
 /*
 TO-DO:
 - support playing as black
-- fix click on piece to show options - works until drag and drop is used
 - fix promotion - works sporadically
 - add analysis board
+   - add go to fen/ start from fen - will need validation
 - add move history
 - show won pieces for each side
 - add win dialog
 - fix game over alerts so that they show after the move
 - fix game over alerts so that they are in the style of promotion dialog
- - separate functions into utils files
 */
 
 const buttonStyle = {
@@ -82,18 +80,25 @@ function App() {
     useState<ISquaresRightClicked>({});
   const [moveSquares, setMoveSquares] = useState({});
   const [optionSquares, setOptionSquares] = useState<ISquaresOptions>({});
+  const [history, setHistory] = useState<string[]>([]);
+  const [currentFen, setCurrentFen] = useState<string>(game.fen());
+  const [loadFen, setLoadFen] = useState<string>('');
+  const [loadPgn, setLoadPgn] = useState<string>('');
 
   useEffect(() => {
     if (game.isCheckmate()) {
-      alert('Checkmate!');
+      setTimeout(alert('Checkmate!') as unknown as TimerHandler, 700);
     } else if (game.isDraw()) {
-      alert('Draw!');
+      setTimeout(alert('Draw!') as unknown as TimerHandler, 700);
     } else if (game.isStalemate()) {
-      alert('Stalemate!');
+      setTimeout(alert('Stalemate!') as unknown as TimerHandler, 700);
     } else if (game.isThreefoldRepetition()) {
-      alert('Threefold Repetition!');
+      setTimeout(alert('3xRepetition!') as unknown as TimerHandler, 700);
     } else if (game.isInsufficientMaterial()) {
-      alert('Insufficient Material!');
+      setTimeout(
+        alert('Insufficient Material!') as unknown as TimerHandler,
+        700
+      );
     }
     if ((!game.isGameOver() || game.isDraw()) && playerTurn === 'b') {
       setTimeout(
@@ -110,6 +115,8 @@ function App() {
         500
       );
     }
+    setHistory(game.history());
+    setCurrentFen(game.fen());
   }, [gamePosition, playerTurn]);
 
   useEffect(() => {
@@ -138,6 +145,60 @@ function App() {
             {level}
           </button>
         ))}
+      </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <div>
+          <input
+            type="text"
+            value={loadFen}
+            onChange={(e) => setLoadFen(e.target.value)}
+          />
+          <button
+            style={{
+              ...buttonStyle,
+              margin: '10px',
+              backgroundColor: '#B58863',
+            }}
+            onClick={() => {
+              game.load(loadFen);
+              setGamePosition(game.fen());
+              setLoadFen('');
+              setLoadPgn('');
+            }}
+          >
+            Load FEN
+          </button>
+        </div>
+
+        <div>
+          <textarea
+            value={loadPgn}
+            onChange={(e) => setLoadPgn(e.target.value)}
+            style={{ marginTop: '10px' }}
+          />
+          <button
+            style={{
+              ...buttonStyle,
+              marginLeft: '10px',
+              marginBottom: '10px',
+              backgroundColor: '#B58863',
+            }}
+            onClick={() => {
+              game.loadPgn(loadPgn);
+              setGamePosition(game.fen());
+              setLoadPgn('');
+              setLoadFen('');
+            }}
+          >
+            Load PGN
+          </button>
+        </div>
       </div>
 
       <Chessboard
@@ -235,6 +296,8 @@ function App() {
       >
         Undo
       </button>
+      <div style={{ margin: '10px' }}>{history.join(', ')}</div>
+      <div style={{ margin: '10px' }}>{currentFen}</div>
     </div>
   );
 }
